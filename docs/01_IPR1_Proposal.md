@@ -1,287 +1,272 @@
-# IPR1 Proposal — Governance Instability Predictor
+# IPR1 Proposal — Can Socioeconomic Indicators Improve Next-Year Governance Forecasts?
+### A cross-country study with a Morocco case study
  
 **Team:** Michael Hoefler, Colin Railey, Mercedes Rothrock  **Course:** AI380  **Date:** 24 November 2026
-**Techniques:** Hidden Markov Models (HMM), Bayesian Networks (BN)
+**Technique:** small feedforward neural network (multilayer perceptron, MLP), compared against Ridge regression and persistence baselines
  
 ---
  
 ## 1. Problem Definition
  
 ### 1.1 Problem statement
-Given yearly economic, political, and social indicators for a country, estimate the probability that it is in a **Stable**, **Fragile**, or **Unstable** governance condition this year and next year. Then measure how much those estimates get worse when indicators are missing or unreliable.
+We ask whether a small neural network can predict next year's World Bank **Political Stability (PV)** and **Government Effectiveness (GE)** scores more accurately than two simple baselines. The network uses each country's current scores plus four socioeconomic indicators. We also measure how much accuracy drops when those indicators are missing or unreliable.
  
 ### 1.2 Stakeholder and need
-**Primary users:** analysts on country-risk or early-warning teams, such as those at development banks, humanitarian NGOs, foreign-ministry regional desks, or sovereign-risk groups. These analysts monitor roughly 200 countries and have to decide where to focus.
+**Intended users:** regional and country analysts, for example at NGOs, development agencies, or policy and security desks, who prepare country assessments. **Morocco** is the worked example of that use case throughout the proposal.
  
-They need three things:
-1. **A calibrated probability, not a rank.** "35% chance of becoming Unstable" supports a decision. "Ranked 41st" does not.
-2. **An explicit signal of transition risk.** The countries that matter most are the ones about to change state, not the ones that stay where they are.
-3. **An honest statement of how far to trust each estimate.** Data gaps are usually worst in exactly the countries where instability is highest. A tool that quietly imputes missing values is least reliable where it matters most.
-### 1.3 Why an AI approach is justified
-| Approach | What it gives | What it cannot do |
-|---|---|---|
-| **Spreadsheet composite index** (average the z-scored indicators, then apply a threshold) | A static ranking that is easy to explain | It has no model of how states persist or change. It gives no probabilities. It handles missing values ad hoc (drops rows or fills in means), which biases results for fragile countries. |
-| **Persistence rule** ("next year's state = this year's state") | Very high overall accuracy, because governance changes slowly | It predicts **zero transitions** by construction, and transitions are the events analysts care about. |
-| **Probabilistic AI (HMM + BN)** | Treats stability as a **hidden state** that is seen only through noisy indicators. It learns **transition probabilities** and smooths over time. It **removes missing indicators exactly** from the calculation instead of guessing their values (marginalization). The BN captures how indicators depend on each other and supports **sensitivity / value-of-information** queries. | It is harder to explain than an index, and it relies on Markov and conditional-independence assumptions (see §3.6). |
+They need a reproducible answer to one question: *do widely available socioeconomic indicators tell us anything about next year's governance scores beyond what last year's score already says?* They also need to know whether that answer still holds when data is incomplete. The project supports analyst judgment. It **does not** issue operational alerts.
  
-We **do not** assume the model will beat persistence on overall accuracy. The case for using AI rests on three things a rule cannot provide: **transition detection, calibrated uncertainty, and graceful degradation under missing or noisy data** (requirements R4–R7). Persistence and a feature-matched logistic regression serve as baselines.
+**What "stability" means here:** PV measures perceptions of destabilization and threats to political authority. GE measures perceptions of the quality of public services and policy. Both are **limited proxies** for governance stability. We predict their published 0–100 scores separately and do not combine them into an invented index. [5, 6]
+ 
+### 1.3 Why test an AI approach?
+- **Spreadsheet / persistence:** a spreadsheet can make the non-AI prediction "next year's score = this year's score." Governance changes slowly, so this baseline is hard to beat.
+- **Ridge regression:** fits a constrained *linear* relationship between the same inputs and each outcome.
+- **Neural network:** tests whether a small *nonlinear* relationship adds measurable value. For example, an inflation spike may matter more in a low-income country than in a high-income one.
+The extra complexity is justified **only by evidence**. A result where a baseline wins is acceptable and useful.
  
 ### 1.4 Scope
 | Included | Excluded |
 |---|---|
-| Country-year level, about 190–214 economies, 1996–2024 | Subnational, monthly, or event-level forecasting (e.g., ACLED events) |
-| Three ordinal stability states (Stable / Fragile / Unstable) | Predicting specific events (coups, protests, war onset); possible stretch-goal validation only |
-| Public CSVs: World Bank **Worldwide Governance Indicators (WGI)** and **World Development Indicators (WDI)** | Text or news data, LLMs, deep sequence models |
-| Nowcast (year *t*) and one-year-ahead forecast (*t+1*) | Forecasts more than one year ahead (reported only as a qualitative extension) |
-| Robustness experiments with missing and noisy indicators; per-indicator sensitivity | Causal claims or policy recommendations; a real-time deployed service |
+| About 180 countries (final count set by the data audit, R1), one year ahead | Forecasts more than one year ahead; monthly labels created from annual scores |
+| Two outcomes: WGI PV and GE (0–100 scores, 2026 vintage) | Predicting coups or other events; causal claims |
+| Four UN-hosted inputs plus the current year's PV and GE | Other countries' data in the Morocco-only analysis; text or news data |
+| Chronological validation; two baselines; missing-data and noise tests | Real-time deployment |
+| Leave-one-input-out analysis; Morocco case study | Choosing features or settings using final-test errors |
  
 ### 1.5 Feasibility
-- **The data is small and clean.** WGI and WDI share ISO3 country codes and year keys, so building the panel is a single merge of about 5,500 country-years. The 1996–2002 WGI is biennial, which gives naturally missing years for testing.
-- **Computation is cheap.** The models train in seconds on a laptop, so we can run many robustness trials (seeds × masking rates × noise levels).
-- **The libraries are mature.** `hmmlearn` and `pgmpy` cover the standard parts. The only new core code is a forward–backward algorithm that handles missing values (about 150 lines), and it can be checked directly against `hmmlearn` on complete data.
-- **There is a clear fallback.** If BN structure learning (Model B, §3.3) falls behind schedule, the HMM with naive-Bayes emissions (Model A) is a complete deliverable that still answers the research question.
-- This project is feasible given the 20-hour expectation of each teammate and 3 teammates contributing.
+- **Data:** four public annual series plus one WGI workbook (already obtained), joined on ISO3 country code and year. This gives about 3,200 development rows and about 900 test rows.
+- **Compute:** `scikit-learn` MLP and Ridge models with fixed small search grids. Every fit takes seconds on a laptop.
+- **Team:** three members with clear owners (§7). Most of the effort goes into checking data, comparisons, and conclusions, not into building a large application.
+- **Fallback:** if the network is unstable, Ridge with the same pipeline is a complete result.
 ---
  
-## 2. Related Work
-_TODO (teammate)._
+## 2. Related Work and Research Question
+ 
+**Political-instability forecasting.** Goldstone et al. (2010) predict the onset of instability across countries using a small set of variables, including regime type. They report better than 80% accuracy with a two-year lead for worldwide cases from 1955–2003. *We reuse* their emphasis on a precise outcome and a parsimonious model. *We differ* because they classify discrete events using political variables, while we predict continuous WGI scores from socioeconomic inputs. Their accuracy therefore is not our benchmark. [1]
+ 
+**Evidence against assuming a complex model will win.** Makridakis, Spiliotis & Assimakopoulos (2018) compare methods on 1,045 monthly series from the M3 forecasting competition. Statistical methods beat machine-learning methods on both accuracy measures at every horizon tested, at lower computational cost. Their setting is monthly and mostly univariate, so it does not prove our network will fail. *We adapt* their insistence on strong simple baselines and independent evaluation. This is why persistence and Ridge are required comparisons. [2]
+ 
+**How to evaluate later observations.** Hyndman & Athanasopoulos describe persistence forecasts and evaluation with a rolling forecasting origin, where training uses only observations before each evaluated point. Their worked example shows that how well a model fits its training data is not the same as how well it forecasts. *We adapt* expanding training windows within the development years and reserve the latest years for one final test. [3]
+ 
+**A maintained neural-network implementation.** The scikit-learn MLP documentation covers nonlinear regression, sensitivity to input scaling and random initialization, and L2 regularization. It recommends the L-BFGS optimizer for small datasets. These are implementation guidelines, not evidence of accuracy. *We reuse* that implementation with a small fixed grid of architectures, input scaling fitted on training data only, and repeated random seeds. Ridge provides the constrained alternative. [4, 7]
+ 
+**Measurement limits.** The WGI documentation describes the indicators as composites built from perception data, each with a stated uncertainty. It reports that current and previous data versions correlate at about 0.99–1.00, which supports consistency across releases but does not mean the scores are measured perfectly. *We reuse* its outcome definitions, keep a single data version, and treat our predictions as estimates of *published* scores. [5, 6]
+ 
+**Gap / research question.** These sources lead to a bounded study:
+- *Does a small regularized neural network that uses current scores plus four socioeconomic indicators improve on Ridge and persistence for next-year PV and GE across countries?*
+- *How much of any gain survives when inputs are missing or noisy?*
+- *Which inputs contribute, and does the pooled model help for Morocco?*
+The contribution is a controlled comparison and an honest explanation of success or failure. It is not a claim to discover what causes national stability.
  
 ---
  
 ## 3. Problem Formulation
  
-### 3.1 Unit of analysis and data
-One **sequence per country**, with a **one-year time step**, covering t = 1996 … 2024.
+**Type:** supervised regression with two outputs, run offline in Python.
+**One example:** the input vector **x**(c, t) for country *c* in year *t*, paired with the target **y**(c, t+1) = [PV, GE] in the next year.
  
-We use the **WGI 2025 revision** in its standard-unit estimates (and their published standard errors), not the new 0–100 scores. The 2025 revision recalculated all history back to 1996, so we use **only one vintage** and never mix it with older downloads.
- 
-| Symbol | Indicator | Source / code | Group | Role |
-|---|---|---|---|---|
-| O₁ | Voice & Accountability | WGI VA (estimate) | Political | Evidence |
-| O₂ | Government Effectiveness | WGI GE | Political | Evidence |
-| O₃ | Regulatory Quality | WGI RQ | Political | Evidence |
-| O₄ | Rule of Law | WGI RL | Political | Evidence |
-| O₅ | Control of Corruption | WGI CC | Political | Evidence |
-| O₆ | GDP growth (annual %) | WDI `NY.GDP.MKTP.KD.ZG` | Economic | Evidence |
-| O₇ | Inflation, CPI (annual %) | WDI `FP.CPI.TOTL.ZG` | Economic | Evidence |
-| O₈ | Unemployment (% labor force) | WDI `SL.UEM.TOTL.ZS` | Economic | Evidence |
-| O₉ | Infant mortality (per 1,000) | WDI `SP.DYN.IMRT.IN` | Social | Evidence |
-| O₁₀ | Intentional homicides (per 100k) | WDI `VC.IHR.PSRC.P5` | Social | Evidence (data is sparse, which is useful for missingness tests) |
-| y | Political Stability & Absence of Violence | WGI PV (estimate) | — | **Label source only** |
- 
-The final indicator list will be frozen at IPR2 after the missingness audit (R1).
- 
-**Preprocessing.** Skewed economic and social series are log- or signed-log-transformed (for example, inflation). All series are z-scored using **training-period** statistics only.
- 
-**Labels.** We discretize PV using training-period (1996–2016) quantiles q₂₀ and q₅₀:
- 
-- Unstable: PV < q₂₀
-- Fragile: q₂₀ ≤ PV < q₅₀
-- Stable: PV ≥ q₅₀
-These cut points are fixed **before** we look at any test data. PV is **excluded from the evidence** so the label does not leak into the inputs. Because WGI dimensions share some perception sources, O₁–O₅ are correlated with PV. We will therefore also report an **economic + social only** ablation (O₆–O₁₀) to show how much of the signal is shared measurement versus independent evidence.
- 
-### 3.2 HMM formulation
-- **Hidden state:** Sₜ ∈ {Stable, Fragile, Unstable}
-- **Initial distribution:** πₖ = P(S₁₉₉₆ = k)
-- **Transition model:** A_ij = P(Sₜ₊₁ = j | Sₜ = i). It is first-order, constant over time, and **shared across countries**, so there are 6 free parameters. The time step is always one year. In the biennial years (1997, 1999, 2001), all WGI evidence is missing and the step is driven by A alone.
-- **Emission model (Model A, Gaussian, diagonal covariance):**
-  $$p(o_t \mid S_t = k) = \prod_{d \in \text{obs}(t)} \mathcal{N}(o_{t,d};\ \mu_{k,d},\ \sigma^2_{k,d})$$
-  Missing dimensions are **left out of the product**. Under a missing-at-random (MAR) assumption, this is exact marginalization, so no imputation is needed.
-- **Training (primary, supervised):** labels are observed in the training years, so we estimate parameters by maximum likelihood. A and π come from counts with Laplace smoothing (α = 1), and μ, σ² come from per-state means and variances.
-  **Training (comparison, unsupervised):** Baum–Welch (EM) with 10 random restarts. Learned states are aligned to the labels with the Hungarian algorithm on emission means.
-- **Inference queries:**
-  - *Nowcast (filtering):* αₜ(k) = P(Sₜ = k | o₁:ₜ), computed with the scaled forward algorithm.
-  - *Forecast:* P(Sₜ₊₁ = j | o₁:ₜ) = Σᵢ αₜ(i) A_ij.
-  - *Retrospective:* forward–backward smoothing; Viterbi for the most likely path (descriptive only).
-  - *Alerts:* argmax of the state, plus a transition alert when the forecast argmax differs from the nowcast argmax, or when P(Unstable) > τ. τ is tuned on validation data only.
-### 3.3 Bayesian network formulation (Model B: BN-structured emissions)
-Model A assumes the indicators are independent given the state, which is unrealistic (for example, Rule of Law and Control of Corruption move together). Model B replaces the emission model with a **per-year BN**, which turns the whole system into a two-slice dynamic Bayesian network (DBN):
-- **Variables:** Sₜ, plus each indicator discretized into 3 bins using training-period terciles (Low / Mid / High).
-- **Structure:** Sₜ is a parent of every indicator. Additional indicator→indicator edges are learned with Hill-Climb search and a BIC score, with these constraints: no edges into Sₜ, maximum in-degree of 2, and only edges between indicators in the same year.
-- **Parameters:** conditional probability tables estimated with a Bayesian estimator (BDeu prior, equivalent sample size 5), so cells with sparse data stay non-zero.
-- **Emission likelihood:** P(oₜ | Sₜ = k) is computed by variable elimination, with **missing nodes summed out**. These likelihoods feed the same forward algorithm as Model A, so A and π are shared and the two models differ only in the emission model.
-- **Sensitivity queries:** mutual information I(Sₜ; O_d) and the expected value of information of each indicator. These directly address the "sensitivity to unreliable indicators" goal.
-### 3.4 Missing and unreliable data formulation
-| Condition | How it is generated (test period only) | Model handling |
+### 3.1 Inputs and targets
+| Variable | Definition | Source |
 |---|---|---|
-| Naturally missing | As it occurs in WGI/WDI | Marginalized out |
-| MCAR masking | Remove a fraction m ∈ {0, 10, 30, 50}% of indicator values uniformly at random | Marginalized out |
-| MNAR masking | Same overall m, but the masking probability is doubled for country-years whose true state is Fragile or Unstable | Marginalized out (this tests the violation of the MAR assumption) |
-| Block missingness | An entire group (political, economic, or social) removed | Marginalized out |
-| Unreliable values | WGI: oₜ,d + ε, ε ~ N(0, (c·SEₜ,d)²), using **WGI's own published standard errors**, c ∈ {1, 2}. WDI: ±10% / ±20% relative noise | No special handling; tests whether temporal smoothing absorbs the noise |
+| Youth unemployment | Ages 15–24, both sexes, % of youth labor force (modelled estimates) | ILO ILOEST [8] |
+| Inflation | Annual CPI change, % (zero and negative values are valid) | UN SDG platform, `FP_CPI_TOTL_ZG` [9] |
+| GDP per capita | PPP, constant 2021 international $ (log-transformed) | UNdata / WDI `NY.GDP.PCAP.PP.KD` [10] |
+| Basic drinking water | % of population using at least basic services | WHO/UNICEF JMP [11] |
+| PV(t), GE(t) | **Current-year** scores (0–100) | WGI 2026 workbook [6] |
+| **Targets** PV(t+1), GE(t+1) | Next-year scores (0–100, not rescaled) | WGI 2026 workbook [6] |
  
-The baseline for these comparisons is **logistic regression with mean imputation**.
+**Why the current scores are inputs.** Persistence already uses PV(t) and GE(t). Giving the network and Ridge the same information makes the comparison fair. It also turns the research question into the one the stakeholder cares about: *do the socioeconomic indicators add information beyond last year's score?*
  
-### 3.5 Library mapping
-| Formulation element | Implementation |
-|---|---|
-| Country-year panel, NaN-preserving merge | `pandas` (key = ISO3 × year) |
-| Gaussian HMM on complete data; reference implementation | `hmmlearn.hmm.GaussianHMM(n_components=3, covariance_type="diag")`. Parameters are set directly (`startprob_`, `transmat_`, `means_`, `covars_`) for the supervised model. `hmmlearn` does not accept NaN, which is why we need our own forward algorithm. |
-| Forward / forward–backward with missing dimensions | Custom NumPy code in log space. It must match `hmmlearn.score()` within 1e-8 on complete data (verification hook). |
-| BN emissions | `pgmpy` `DiscreteBayesianNetwork` (`BayesianNetwork` in older versions), `HillClimbSearch` + `BIC` score, `BayesianEstimator` (BDeu), `VariableElimination` for likelihoods and mutual information |
-| Baselines and metrics | `scikit-learn` (`LogisticRegression(multi_class)`, `f1_score`, `brier_score_loss`, calibration curves) |
-| Property-based tests | `pytest` + `hypothesis` (random sequences, random NaN masks) |
+GDP and WGI are World Bank series. GDP is accessed through UNdata; being hosted by the UN does not mean the UN produced it. Extraction filters and the output schema are listed in Appendix B.
  
-### 3.6 Task environment and assumptions
-This is a **monitoring and inference system**, not an agent that acts on its environment, so a PEAS description would be contrived. Instead:
-- **Inputs:** yearly indicator vectors oₜ ∈ (ℝ ∪ {NaN})¹⁰ per country, plus the history o₁:ₜ.
-- **Outputs:** nowcast and forecast distributions over the 3 states, an alert flag, and a low-information flag (R8).
-- **Environment properties:** partially observable (the state is hidden), stochastic, sequential, and observed at discrete time steps. The data is released with a lag (WGI each autumn) and is occasionally revised.
-- **Assumptions (tested where possible):**
-  1. First-order Markov dynamics. *Check:* compare against a second-order model on validation data.
-  2. A single transition matrix shared by all countries and constant over time. *Check:* per-region A, if time permits.
-  3. Indicators are independent given the state (Model A). *Relaxed in Model B.*
-  4. Data is missing at random for exact marginalization. *Stress-tested with MNAR masking.*
-  5. A label derived from PV is a reasonable proxy for "governance stability." *Stretch goal:* check against external coup and conflict-onset data.
-  6. Countries are independent sequences, with no cross-border contagion.
-**Data split (temporal):** train 1996–2016, validate 2017–2019, test 2020–2024. About 190 countries × 5 test years gives about 950 test country-years. Forward filtering runs over each country's full observation history, but parameters, z-score statistics, label cut points, and τ come from training and validation data only. Test labels are never used during fitting.
+### 3.2 Data split (chronological; years are never shuffled)
+| Use | Input years | Outcome years | Approx. rows |
+|---|---|---|---|
+| Development | 2002–2019 | 2003–2020 | about 180 countries × 18 years ≈ 3,200 |
+| Reserved final test | 2020–2024 | 2021–2025 | about 180 × 5 ≈ 900 |
  
+Input years start in **2002** because WGI has no 2001 release, and persistence needs the prior year's score.
+ 
+**Validation:** expanding-window folds predicting each outcome year *v* ∈ {2016, …, 2020}. Each fold trains on outcome years 2003 through *v−1*. After selecting settings, we refit on all development data, then freeze the models and the preprocessing before computing any final-test error. [3, 12]
+ 
+**Rows dropped or imputed:** rows missing a target or a current-year score are dropped and counted. Missing socioeconomic inputs are **imputed with training-fold medians** inside the pipeline. Imputed values are counted per country and per year, and no imputation is applied to the stored dataset.
+ 
+### 3.3 Model, objective, and library mapping
+- **Pipeline:** `make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), MLPRegressor(...))`, fitted on `X_train` with shape (n, 6) and `Y_train` with shape (n, 2), target order `[pv, ge]`. `.predict(X)` returns two scores per row.
+- **Ridge:** the same imputer and scaler, followed by `Ridge(alpha)`.
+- **Training objective:** squared error over both outputs plus an L2 weight penalty (`alpha`).
+- **Model selection:** minimize the mean MAE, weighted equally across the two outputs, the five validation years, and five seeds.
+- **Reporting:** final MAE and RMSE are reported separately for PV and GE, for all countries and for Morocco.
+### 3.4 Task context and assumptions
+This is a static prediction system, not an agent acting on its environment, so a PEAS description does not apply.
+ 
+- **Inputs:** one row of six values per country-year.
+- **Outputs:** two predicted scores, plus flags for extrapolation and imputation.
+- **Assumptions:**
+  1. Relationships learned from earlier years may last long enough to test. They are not assumed to hold permanently.
+  2. Countries are pooled under one shared model, with no country-specific terms.
+  3. The study is a **retrospective** experiment on the currently published data version. Release delays and revisions mean it cannot recreate what was actually known at each historical date. [5, 8]
 ---
  
 ## 4. Requirements Specification
-The full specification, with metrics, acceptance criteria, rationale, evidence methods, and a change log, is in **[`docs/requirements.md`](requirements.md)**. Summary:
+The full specification is in **[`docs/requirements.md`](requirements.md)**. These are proposed classroom thresholds, chosen before any results were seen. Failed requirements stay visible.
  
 | ID | Type | Short name |
 |---|---|---|
-| R1 | Functional | NaN-preserving country-year panel with missingness report |
-| R2 | Functional | Valid nowcast and forecast posteriors for every country-year |
-| R3 | Performance | Next-year forecast macro-F1 vs. feature-matched baseline |
-| R4 | Performance | Transition detection (recall/precision on state changes) |
-| R5 | Quality | Probability calibration (Brier skill, ECE) |
-| R6 | Robustness | Graceful degradation under MCAR/MNAR missing indicators |
-| R7 | Robustness | Stability under noise scaled to WGI's published standard errors |
-| R8 | Safety | Low-information flag; never output a label without its probability |
-| R9 | Reliability | Reproducibility and stability across seeds |
-| R10 | Functional | Per-indicator sensitivity report |
+| R1 | Functional | Traceable cross-country lagged dataset |
+| R2 | Reliability | Chronological / final-test isolation |
+| R3 | Functional | Complete, labeled predictions (all countries + Morocco) |
+| R4 | Performance | MAE ≥ 10% below both baselines |
+| R5 | Robustness | Invalid-input handling and extrapolation flags |
+| R6 | Robustness | Degradation under missing / noisy inputs |
+| R7 | Reliability | Seed stability |
+| R8 | Explanation | Leave-one-input-out contribution (development only) |
+| R9 | Reliability | Reproducible by a second team member |
  
 ---
  
 ## 5. Technique Selection and Design
-
+ 
 ### 5.1 Chosen technique
-We chose an **HMM whose emissions are modelled by a Bayesian network**, which together form a two-slice dynamic Bayesian network. Four needs drive this choice:
- 
-| Need | How HMM + BN meets it |
-|---|---|
-| Stability is not directly observed; it shows up only through noisy indicators | A hidden state Sₜ with an emission model is exactly that structure |
-| Governance tends to stay the same, but changes sometimes | The transition matrix A estimates both directly. Its entries can be read as plain statements, e.g. "P(Fragile → Unstable) = 0.08". |
-| Indicators are missing, often for the most fragile countries | Missing values are marginalized out exactly in both the Gaussian and the BN emissions, so no imputation is needed |
-| Measure how sensitive the model is to each indicator | BN queries give mutual information and value of information for each indicator, alongside drop-one experiments |
- 
-Every output is a probability distribution, which supports the calibration requirement (R5) and the safety requirement (R8).
+We use a **small MLP**, with `tanh` activation, two linear outputs, and the L-BFGS optimizer. It is chosen to *test* whether nonlinear learning helps, not because we know it will be better. Ridge and persistence are the required comparisons. Pooling across countries gives the network enough rows to learn interactions that a single country's roughly 20 years could not support.
  
 ### 5.2 Alternatives considered
-| Alternative | Strengths | Why we did not choose it |
-|---|---|---|
-| **Gradient-boosted trees** (e.g. XGBoost) on lagged features | Usually strong tabular accuracy; handles NaN natively | Its NaN handling is a learned default direction, not marginalization. Under MNAR masking, that rule is likely to fail in the countries we care about most. It has no explicit transition dynamics, its probabilities need separate calibration, and its feature importance is less principled than BN information measures. **We keep it as a stretch-goal baseline** so the AI model is compared against a strong discriminative model. |
-| **LSTM / recurrent network** | Captures long-range temporal patterns | There are only about 190 sequences of about 29 annual steps each, which is too little data. It also needs imputed inputs and is hard to interpret. |
-| **Kalman filter** (linear-Gaussian state space) | Exact handling of missing data; continuous latent state | It produces a continuous "stability score", not the discrete risk tiers the stakeholder uses. Discretizing afterwards would bring back the same thresholding problem the spreadsheet approach has. |
-| **Markov chain on observed labels** | Simple | It needs the PV label at time *t*, which would make it the persistence baseline. It cannot use the other indicators as evidence. |
+| Alternative | Why not selected |
+|---|---|
+| **HMM + Bayesian network** (the original pitch) | It needs the scores turned into discrete stability tiers, which throws away information analysts use. A missing-data-aware forward algorithm and structure learning add implementation risk for a three-person team on this schedule. We keep the pitch's *missing-data question* (R6) and drop the technique. |
+| **Gradient-boosted trees** | A strong tabular baseline, but it adds a second large search space. It is a stretch goal if time remains. |
+| **Morocco-only model** | Only about 20 annual pairs, which is too few for a nonlinear model. Morocco is kept as a case study within the pooled model. |
  
-### 5.3 Course coverage and fallbacks
-| Component | Status | Fallback |
-|---|---|---|
-| BN representation and exact inference (variable elimination) | Covered | — |
-| HMM filtering, prediction, smoothing, Viterbi | Covered | — |
-| Supervised MLE of parameters | Covered | — |
-| Baum–Welch (EM) unsupervised training | **(planned)** | Drop it. Supervised MLE is already the primary method; EM is only a comparison. |
-| BN structure learning (Hill-Climb + BIC) and DBN composition | **(planned)** | Specify the structure by hand from domain knowledge (RL–CC, GE–RQ, GDP growth–unemployment), or use naive-Bayes emissions (Model A alone). |
+**(planned)** labels: Ridge, temporal cross-validation, and ablation analysis may come before class coverage. The fallback for each is the standard `scikit-learn` implementation used as documented.
  
-### 5.4 Architecture / data flow
+### 5.3 Architecture / data flow
 ```mermaid
 flowchart LR
-  subgraph Inputs
-    WGI[WGI 2025 CSV<br/>estimates + std errors]
-    WDI[WDI CSVs]
-  end
-  WGI --> P[Panel builder<br/>ISO3 × year, NaN preserved<br/>missingness report · R1]
-  WDI --> P
-  P --> PRE[Preprocess<br/>transforms, train-only z-scores,<br/>PV → labels, PV dropped from evidence]
-  PRE --> SPLIT{Temporal split<br/>train / val / test}
-  SPLIT -->|train| FIT[Fit<br/>π, A by counts<br/>emissions: Gaussian A / BN B]
-  PERT[Perturbation module<br/>MCAR · MNAR · block · SE-noise] -.->|test only| INF
-  SPLIT -->|val/test evidence| INF[Inference engine<br/>missing-aware forward /<br/>forward–backward]
-  FIT --> INF
-  INF --> OUT[Outputs<br/>nowcast · forecast · alerts<br/>low-info flag · R2, R8]
-  OUT --> EVAL[Evaluation<br/>vs baselines, calibration,<br/>robustness, sensitivity · R3–R10]
-  BASE[Baselines<br/>majority · persistence · LogReg] --> EVAL
+  S[Source files<br/>ILO · UN SDG · UNdata · JMP · WGI 2026<br/>hashed, unchanged] --> J[Join on ISO3 × year<br/>x at t → y at t+1 · R1]
+  J --> SP{Chronological split}
+  SP -->|development| CV[Expanding-window folds<br/>2016–2020 · R2]
+  CV --> SEL[Select settings<br/>MLP grid · Ridge alpha]
+  SEL --> FIT[Refit on all development<br/>freeze pipeline]
+  SP -->|final test 2021–2025| PRED[Predict · flags · R3, R5]
+  FIT --> PRED
+  PERT[Mask / noise inputs · R6] -.-> PRED
+  PRED --> EV[Evaluate vs Ridge + persistence<br/>all countries + Morocco · R4, R7]
+  CV --> ABL[Leave-one-input-out · R8]
 ```
-_If the proposal is exported to PDF, this diagram is replaced with a rendered PNG._
+_If the proposal is exported to PDF, this diagram is replaced with a rendered image._
  
-### 5.5 Major design decisions
-| Decision | Choice | Reason |
-|---|---|---|
-| Number of states | 3 | Two states hide the "Fragile" middle tier, which is where early warning matters. Four or more states would leave too few training examples per state for the Unstable tiers. An ablation with K = 2 and K = 4 will be run on validation data. |
-| Time step | 1 year | Matches how often WGI and WDI are released. The biennial years 1996–2002 are treated as fully missing so the transition matrix A keeps a one-year meaning. |
-| Gaussian covariance (Model A) | Diagonal | Gives 20 parameters per state, which keeps estimates stable for the small Unstable class. Full covariance with marginal sub-blocks also handles missing data correctly, and is run as an ablation. |
-| BN discretization (Model B) | 3 tercile bins per indicator, computed on training data | With in-degree ≤ 2 plus the state as a parent, each conditional probability table has at most 3 × 3 × 3 parent configurations, which the training data can support. |
-| Priors | Laplace smoothing α = 1 on A and π; BDeu with equivalent sample size 5 on CPTs | Keeps rare transitions (e.g. Stable → Unstable) and sparse table cells from being exactly zero, which would make the likelihood −∞ on test data |
-| Numerics | Log-space forward recursion with log-sum-exp | Prevents numerical underflow over sequences of about 29 steps |
-| Decision rule | Argmax for the state label; an alert threshold τ on P(Unstable), tuned on validation data only | Separates calibrated probabilities from the action threshold an analyst chooses |
-| Stack | Python 3.11, NumPy, pandas, `hmmlearn` ≥ 0.3, `pgmpy` ≥ 1.0, scikit-learn, pytest + Hypothesis | Mature, pip-installable, and runs on a laptop. Versions are pinned in `requirements.txt`. |
+### 5.4 Prespecified choices
+| Component | Choice |
+|---|---|
+| Network | `hidden_layer_sizes` ∈ {(8,), (16,)}; `activation='tanh'`; `solver='lbfgs'`; `alpha` ∈ {0.1, 1, 10} |
+| Optimization | `max_iter=5000`; `tol=1e-6`; `early_stopping=False`; seeds 0–4; convergence warnings recorded |
+| Selection | Lowest mean validation MAE. Ties within 1e-6 go to the smaller network, then the larger alpha. |
+| Ridge | `alpha` ∈ {0.1, 1, 10}, using the same folds and selection rule |
+| Persistence | ŷ(t+1) = y(t). No fitting. |
+| Libraries | pandas, NumPy, scikit-learn, pytest + Hypothesis, matplotlib; versions pinned |
  
 ---
  
- 
 ## 6. Verification and Validation Plan
-
+ 
 ### 6.1 Verification — did we build it right?
-These are deterministic checks that do not depend on how well the model predicts the real world.
- 
-**Known-answer and oracle tests**
-- **Hand-computed HMM:** a 2-state, 3-step example worked on paper. Filtered posteriors and the log-likelihood must match to 1e-12.
-- **Brute-force oracle:** for sequences with T ≤ 6, enumerate all 3ᵀ state paths. The forward-algorithm likelihood and the smoothed marginals must equal the enumeration (to 1e-9). This includes sequences with NaN masks.
-- **Library equivalence:** on complete data, our forward algorithm must match `hmmlearn` `score()` and `predict_proba()` (to 1e-8). Our BN emission likelihood must match brute-force summation over the joint distribution for small networks.
-- **Mutual information:** if the indicator is independent of the state, I = 0. If the indicator is an exact copy of the state, I = H(S).
-**Property-based tests (Hypothesis)**, run on randomly generated valid parameters, sequences, and NaN masks:
-1. Every posterior is a valid distribution: all entries ≥ 0, sum = 1 ± 1e-9, no NaN. This verifies R2.
-2. **All-missing invariant:** if a sequence has every value missing, the filtered state distribution equals the prior pushed forward through the transitions, π·Aᵗ.
-3. **Marginalization invariant:** masking dimension *d* everywhere gives the same result as a model with dimension *d* removed.
-4. **Label symmetry:** permuting the state labels in the parameters permutes the outputs in the same way.
-5. Estimated rows of A sum to 1 and are strictly positive, because of the Laplace smoothing.
-6. The learned BN graph is acyclic, has no edges into Sₜ, and has in-degree ≤ 2.
-**Data and leakage tests:** the R1 row-reconciliation tests. In addition, assertions check that PV is not among the features, that z-score statistics and quantile cut points come only from training years, and that the fit functions never receive rows from validation or test years.
- 
-**Stochastic components** are checked deterministically first, and then for their statistical behaviour:
-- *Deterministic:* during Baum–Welch, the log-likelihood never decreases from one iteration to the next. With a fixed seed, re-running gives byte-identical output (R9a).
-- *Statistical, synthetic recovery:* we sample 200 sequences × 30 steps from a known 3-state HMM and fit them. Supervised estimates of A must be within 0.05 (max-abs) of the truth. Accuracy on synthetic data with 30% MCAR masking must be within 0.03 of the accuracy of the true-parameter (Bayes-optimal) filter. This confirms the pipeline can recover a structure we know exists before we trust it on real data.
-All tests run in GitHub Actions on every push.
- 
+- **V1 (R1):** independent source audit of three sample pairs for Morocco plus two other countries (2002→2003, 2015→2016, 2024→2025). Automated checks of key uniqueness, units, and that outcome year = input year + 1.
+- **V2 (R2):** saved fold masks; the imputer and scaler are fitted only on training rows. *Tamper test:* changing final-test labels must not change any fitted transformation, selected setting, or model parameter.
+- **V3 (R3):** checks of output shape, finiteness, and the order of the PV and GE columns. *Metric fixture:* actual values [[40, 70], [60, 80]] and predictions [[43, 72], [56, 74]] must give MAEs of 3.5 and 4.0, RMSEs of √12.5 and √20, and a mean MAE of 3.75.
+- **V4 (R5):** unit and Hypothesis tests. The system must reject infinite values, GDP ≤ 0, and percentages outside 0–100. It must accept negative inflation and boundary percentages, and it must flag out-of-range values without dropping them.
+- **V5 (R6 harness):** property test showing that masking inputs changes only the masked cells, and that the imputer then uses training medians, never test statistics.
+- **V6 (pipeline sanity):** generate synthetic data with a known nonlinear signal, y(t+1) = y(t) + f(x). The MLP must beat Ridge on it, and with no signal (pure noise) neither model may beat persistence by more than chance. This confirms the pipeline can find a signal that exists.
+- **V7 (R9):** a second team member re-runs everything from the README and must match predictions within 1e-6.
 ### 6.2 Validation — did we build the right thing?
-**Data.** The real WGI + WDI panel with the temporal split from §3.6. The test set is used **once**, after all modelling choices and τ are frozen on the 2017–2019 validation data. Forecasts are scored on origins t = 2019–2023, predicting years 2020–2024.
- 
-**Baselines**, all using the same features and split:
-- Majority class / climatology
-- Multinomial logistic regression with mean imputation (the main comparison)
-- Persistence, which is given the true state at *t* (reference upper context only)
-- Model A vs. Model B, as an ablation of the BN structure
-- Economic + social indicators only, as an ablation of the WGI shared-source overlap (§3.1)
-- Gradient-boosted trees (stretch goal)
-**Requirement-to-experiment plan**
-| Req. | Experiment | Trials / data | Reported uncertainty |
+| Exp. | Req. | What | Uncertainty reported |
 |---|---|---|---|
-| R3 | Forecast macro-F1, model vs. LogReg | Test set (about 950 country-years) | Country-cluster bootstrap (1,000 resamples); **paired** bootstrap for the difference vs. LogReg |
-| R4 | Transition recall/precision; PR curve | All test transitions (expected about 50–100) | Bootstrap CI; the count of transitions is stated explicitly |
-| R5 | Brier skill score, ECE, reliability diagrams | Test set, nowcast and forecast | Bootstrap CI on BSS and ECE |
-| R6 | Masking curves m ∈ {0, 10, 30, 50}% for MCAR, MNAR, and block masking | 20 mask seeds × each condition × {A, B, LogReg} | Mean ± SD across seeds |
-| R7 | Noise at c ∈ {1, 2} × WGI standard error, plus WDI relative noise | 20 noise seeds × {A, B, LogReg} | Mean ± SD |
-| R8 | Audit of flags; accuracy for flagged vs. unflagged outputs | Full test output | Counts and per-stratum CI |
-| R9 | Seed stability | 10 seeds | SD of macro-F1 |
-| R10 | Drop-one ΔF1 and BN mutual information per indicator | Test set; 1,000 bootstrap resamples | 95% CI; how stable the rank order is across resamples |
+| E1 | R4 | Final-test MAE and RMSE for PV and GE: MLP vs. Ridge vs. persistence. Evaluated once, after freezing. | 95% bootstrap CI that resamples whole countries (1,000 resamples); *paired* for differences between models |
+| E2 | R7 | Five final fits (seeds 0–4) | Mean, sample SD, and range. The best test seed is never selected. |
+| E3 | R6 | 30% of indicator values masked at random, and ±10% relative noise on inputs, over 20 seeds. Run for MLP and Ridge. | Mean ± SD |
+| E4 | R8 | Leave-one-input-out within development: 4 variants × 5 folds × 5 seeds | MAE change by target, year, and seed, including sign changes |
+| E5 | — | **Morocco case study:** its five test-year predictions and errors for each model, plotted against published scores | Descriptive only (5 points, no significance claims) |
  
-**Known validity threats**
-- **2020 COVID shock:** the test period contains an unusual shift in the data, so results are also reported per year.
-- **Few transitions:** there are few state changes, so R4 conclusions are stated with their confidence intervals and never as single point estimates alone.
-- **Label proxy:** the PV-derived label is only a proxy for instability (assumption 5, §3.6).
-**Pre-registered case studies (qualitative).** We plot posterior trajectories for country-years with widely documented instability, to check whether P(Unstable) rose *before* the event. The list is fixed now to prevent cherry-picking: Myanmar 2021, Afghanistan 2021, Sri Lanka 2022, Burkina Faso 2022, Niger 2023, Sudan 2023. Misses are reported alongside hits.
+**Fit budget:** for the MLP, 6 configurations × 5 folds × 5 seeds = 150 selection fits, plus 100 ablation fits, plus 5 final fits. Ridge needs 15 validation fits plus 1 final fit. More fits do **not** add independent observations. Seed variation measures sensitivity to the optimizer, not uncertainty about future events.
  
-**Reporting rule.** Every requirement is reported as met or unmet with its evidence. Any criterion change goes through the change log in `requirements.md`.
-  
+**Reporting rule:** every requirement is reported as met or unmet, with evidence. Per-year errors are shown so that one unusual year (for example, a post-COVID shift) is visible.
+ 
+---
+ 
 ## 7. Plan, Roles, and Risks
-_TODO (teammate)._
+ 
+### 7.1 Schedule and responsibilities
+These dates carry forward IPR2 on **7 December** and the presentation on **11 December**. _Confirm both against the course calendar._
+ 
+| Dates (2026) | Deliverable | Lead |
+|---|---|---|
+| 25–27 Nov | Source files, hashes, ISO3 crosswalk, joined panel, source audit (V1) | **Data lead** _[Name]_ |
+| 28–30 Nov | Persistence, Ridge, fold masks, metric fixtures, isolation tests (V2–V5) | **Evaluation lead** _[Name]_ |
+| 1–3 Dec | MLP selection, seed study, ablation, synthetic sanity check (V6) | **Model lead** _[Name]_ |
+| 4–6 Dec | Review requirements, freeze settings, run the final test once, robustness runs, inspect failures | Whole team |
+| 7 Dec | IPR2: progress evidence, limitations, logged changes | Whole team |
+| 8–11 Dec | Morocco case study, report and slides, independent rerun (V7), rehearsal | Evaluation lead (report) + whole team |
+ 
+**Shared integration tasks:** agree the data schema on day 1, review model-selection records, reconcile the requirement status table, and check that every claim in the report matches saved evidence.
+ 
+### 7.2 If time runs short, simplify in this order
+1. Gradient-boosted trees (stretch goal).
+2. Extra visualizations.
+3. The noise half of R6. Keep the masking half.
+4. Reduce the ablation to one seed. Record a dated change to R8 *before* the final test.
+**Never cut:** the data audit, temporal separation, both baselines, all final-test years, and honest error reporting.
+ 
+### 7.3 Top three risks
+| Risk | Mitigation |
+|---|---|
+| **Persistence is hard to beat.** Scores change slowly, so the indicators may add little. | Accept a negative result as valid. Report the size of every model's gain or loss against persistence. Ridge is the fallback result. |
+| **Misaligned or patchy data.** Wrong units, mixed data versions, or coverage gaps that are worst in fragile countries could create fake predictive value. | Keep source files and hashes, check lags independently, fit preprocessing within each fold, count imputations per country, and test missingness directly (R6). |
+| **Unstable estimates and weak explanations.** Initialization and correlated trends could reverse feature rankings. | Report all seeds, convergence warnings, and extrapolation flags. Label ablation results as exploratory. Make no causal claims. |
+ 
+### 7.4 Elevator Pitch feedback and scope changes
+- **Instructor feedback and decision:** Our initial idea was disapproved, and then we conducted an additional meeting for the same project idea. It was approved, but our instructors recommended we look into another idea since our original one may have proven too difficult or time-consuming to complete.
+- **Student-selected changes since the pitch** (these are *not* evidence of instructor approval):
+  1. **Technique changed from HMM + Bayesian network to a small neural network with Ridge and persistence baselines.** The reasons are lower implementation risk and keeping continuous scores (§5.2).
+  2. **Outputs changed from discrete stability tiers to next-year PV and GE scores.**
+  3. **Scope is cross-country, with Morocco as a case study.**
+  4. **The pitch's "missing / unreliable indicators" goal is kept as R6.**
+- _[For each change the instructor requests, record the change, the section affected, and the evidence it was completed.]_
+---
  
 ## References
-- World Bank (2025). *The Worldwide Governance Indicators: Revised Methodology for Measuring Governance Using Perception Data.* govindicators.org
-- World Bank. *World Development Indicators.* data.worldbank.org
-- _[Related-work sources from §2]_
+[1] Goldstone, J. A., et al. (2010). A Global Model for Forecasting Political Instability. *American Journal of Political Science*, 54(1), 190–208. https://doi.org/10.1111/j.1540-5907.2009.00426.x
+[2] Makridakis, S., Spiliotis, E., & Assimakopoulos, V. (2018). Statistical and Machine Learning forecasting methods: Concerns and ways forward. *PLOS ONE*, 13(3), e0194889.
+[3] Hyndman, R. J., & Athanasopoulos, G. *Forecasting: Principles and Practice*, 3rd ed., Ch. 5. https://otexts.com/fpp3/toolbox.html
+[4] scikit-learn developers. MLPRegressor documentation. Accessed 24 Nov 2026.
+[5] World Bank. Worldwide Governance Indicators: Frequently Asked Questions. Accessed 24 Nov 2026.
+[6] World Bank (2026). Worldwide Governance Indicators, 2026 update. Workbook `wgidataset_with_sourcedata-2026.xlsx` (0–100 governance scores).
+[7] scikit-learn developers. Ridge documentation. Accessed 24 Nov 2026.
+[8] International Labour Organization. ILO modelled estimates (ILOEST): youth unemployment, both sexes, ages 15–24.
+[9] UN Statistics Division. Global SDG Indicators Data Platform, series `FP_CPI_TOTL_ZG`.
+[10] UN Statistics Division. UNdata, WDI: `NY.GDP.PCAP.PP.KD`.
+[11] WHO/UNICEF Joint Monitoring Programme. Household drinking-water data, at least basic services.
+[12] scikit-learn developers. TimeSeriesSplit documentation (we store explicit year-based fold masks).
+ 
+---
+ 
+## Appendix B. Source extraction and data dictionary
+Keep downloaded files unchanged, and record access dates and SHA-256 hashes. Use an explicit **country-name → ISO3 crosswalk**; do not assume every publisher uses the same country field.
+ 
+| Series | Extraction notes |
+|---|---|
+| ILO youth unemployment | Dataset `UNE_2EAP_SEX_AGE_RT_A`; `SEX_T`; `AGE_YTHADULT_Y15-24`; modelled estimates only |
+| UN CPI inflation | `FP_CPI_TOTL_ZG`, national level. Keep zero and negative values; do not substitute CPI index levels. |
+| GDP per capita | `NY.GDP.PCAP.PP.KD`. Do not mix in current-dollar GDP, total GDP, or GDP growth. |
+| JMP basic water | `wat` sheet, `wat_basal_t` (national total). Do not substitute "safely managed" or formatted ">99" strings. |
+| WGI | `pv` and `ge` sheets, governance score (0–100). The latent-estimate column is a different measure. Keep the uncertainty fields for context. |
+| **Output schema** | `iso3, input_year, outcome_year, youth_unemp_pct, inflation_pct, gdp_pc_ppp_2021, basic_water_pct, pv_t, ge_t, pv_t1, ge_t1`. Provenance is kept in a separate manifest. |
+ 
+## Appendix C. Team and instructor records to complete
+| Record | Entry |
+|---|---|
+| Team members and role owners | _[3 names; fill each [Name] in §7.1]_ |
+| Elevator Pitch | 23 November 2026 - all members present |
+| Instructor feedback and scope decision | We were told to evaluate our initial idea further, and upon that evaluation we decided to pivot to this project instead. |
+| IPR1 deadline | Officially due at 2359 on 23 November 2026, however LTC Hutchison granted an extension for us to complete it by the end of Wednesday, 25 Novemeber 2026 due to switching our proposal at the last minute. |
+| DAAW | Please see docs/DAAW.pdf for the full DAAW for IPR1 |
+| Repository / submission | _[Repo URL, commit, `ipr1` tag URL, Canvas upload confirmation]_ |
  
