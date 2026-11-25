@@ -195,7 +195,7 @@ _If the proposal is exported to PDF, this diagram is replaced with a rendered im
 ## 7. Plan, Roles, and Risks
  
 ### 7.1 Schedule and responsibilities
-These dates carry forward IPR2 on **7 December** and the presentation on **11 December**. _Confirm both against the course calendar._
+These dates carry forward IPR2 on **7 December** and the presentation on **11 December**.
  
 | Dates (2026) | Deliverable | Lead |
 |---|---|---|
