@@ -232,18 +232,18 @@ These dates carry forward IPR2 on **7 December** and the presentation on **11 De
 ---
  
 ## References
-[1] Goldstone, J. A., et al. (2010). A Global Model for Forecasting Political Instability. *American Journal of Political Science*, 54(1), 190–208. https://doi.org/10.1111/j.1540-5907.2009.00426.x
-[2] Makridakis, S., Spiliotis, E., & Assimakopoulos, V. (2018). Statistical and Machine Learning forecasting methods: Concerns and ways forward. *PLOS ONE*, 13(3), e0194889.
-[3] Hyndman, R. J., & Athanasopoulos, G. *Forecasting: Principles and Practice*, 3rd ed., Ch. 5. https://otexts.com/fpp3/toolbox.html
-[4] scikit-learn developers. MLPRegressor documentation. Accessed 24 Nov 2026.
-[5] World Bank. Worldwide Governance Indicators: Frequently Asked Questions. Accessed 24 Nov 2026.
-[6] World Bank (2026). Worldwide Governance Indicators, 2026 update. Workbook `wgidataset_with_sourcedata-2026.xlsx` (0–100 governance scores).
-[7] scikit-learn developers. Ridge documentation. Accessed 24 Nov 2026.
-[8] International Labour Organization. ILO modelled estimates (ILOEST): youth unemployment, both sexes, ages 15–24.
-[9] UN Statistics Division. Global SDG Indicators Data Platform, series `FP_CPI_TOTL_ZG`.
-[10] UN Statistics Division. UNdata, WDI: `NY.GDP.PCAP.PP.KD`.
-[11] WHO/UNICEF Joint Monitoring Programme. Household drinking-water data, at least basic services.
-[12] scikit-learn developers. TimeSeriesSplit documentation (we store explicit year-based fold masks).
+[1] Goldstone, J. A., et al. (2010). A Global Model for Forecasting Political Instability. *American Journal of Political Science*, 54(1), 190–208. https://doi.org/10.1111/j.1540-5907.2009.00426.x  
+[2] Makridakis, S., Spiliotis, E., & Assimakopoulos, V. (2018). Statistical and Machine Learning forecasting methods: Concerns and ways forward. *PLOS ONE*, 13(3), e0194889.  
+[3] Hyndman, R. J., & Athanasopoulos, G. *Forecasting: Principles and Practice*, 3rd ed., Ch. 5. https://otexts.com/fpp3/toolbox.html  
+[4] scikit-learn developers. MLPRegressor documentation. Accessed 24 Nov 2026.  
+[5] World Bank. Worldwide Governance Indicators: Frequently Asked Questions. Accessed 24 Nov 2026.  
+[6] World Bank (2026). Worldwide Governance Indicators, 2026 update. Workbook `wgidataset_with_sourcedata-2026.xlsx` (0–100 governance scores).  
+[7] scikit-learn developers. Ridge documentation. Accessed 24 Nov 2026.  
+[8] International Labour Organization. ILO modelled estimates (ILOEST): youth unemployment, both sexes, ages 15–24.  
+[9] UN Statistics Division. Global SDG Indicators Data Platform, series `FP_CPI_TOTL_ZG`.  
+[10] UN Statistics Division. UNdata, WDI: `NY.GDP.PCAP.PP.KD`.  
+[11] WHO/UNICEF Joint Monitoring Programme. Household drinking-water data, at least basic services.  
+[12] scikit-learn developers. TimeSeriesSplit documentation (we store explicit year-based fold masks).  
  
 ---
  
