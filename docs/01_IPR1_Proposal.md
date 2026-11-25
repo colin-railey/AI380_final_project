@@ -1,6 +1,6 @@
 # IPR1 Proposal — Governance Instability Predictor
  
-**Team:** _Michael Hoefler, Colin Railey, Mercedes Rothrock_  **Course:** _AI380_  **Date:** _24 November 2026_
+**Team:** Michael Hoefler, Colin Railey, Mercedes Rothrock  **Course:** AI380  **Date:** 24 November 2026
 **Techniques:** Hidden Markov Models (HMM), Bayesian Networks (BN)
  
 ---
@@ -40,7 +40,7 @@ We **do not** assume the model will beat persistence on overall accuracy. The ca
 - **Computation is cheap.** The models train in seconds on a laptop, so we can run many robustness trials (seeds × masking rates × noise levels).
 - **The libraries are mature.** `hmmlearn` and `pgmpy` cover the standard parts. The only new core code is a forward–backward algorithm that handles missing values (about 150 lines), and it can be checked directly against `hmmlearn` on complete data.
 - **There is a clear fallback.** If BN structure learning (Model B, §3.3) falls behind schedule, the HMM with naive-Bayes emissions (Model A) is a complete deliverable that still answers the research question.
-- _[Add team size / hours per week once confirmed.]_
+- This project is feasible given the 20-hour expectation of each teammate and 3 teammates contributing.
 ---
  
 ## 2. Related Work
