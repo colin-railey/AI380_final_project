@@ -157,11 +157,126 @@ The full specification, with metrics, acceptance criteria, rationale, evidence m
 ---
  
 ## 5. Technique Selection and Design
-_TODO (teammate)._
+
+### 5.1 Chosen technique
+We chose an **HMM whose emissions are modelled by a Bayesian network**, which together form a two-slice dynamic Bayesian network. Four needs drive this choice:
+ 
+| Need | How HMM + BN meets it |
+|---|---|
+| Stability is not directly observed; it shows up only through noisy indicators | A hidden state Sₜ with an emission model is exactly that structure |
+| Governance tends to stay the same, but changes sometimes | The transition matrix A estimates both directly. Its entries can be read as plain statements, e.g. "P(Fragile → Unstable) = 0.08". |
+| Indicators are missing, often for the most fragile countries | Missing values are marginalized out exactly in both the Gaussian and the BN emissions, so no imputation is needed |
+| Measure how sensitive the model is to each indicator | BN queries give mutual information and value of information for each indicator, alongside drop-one experiments |
+ 
+Every output is a probability distribution, which supports the calibration requirement (R5) and the safety requirement (R8).
+ 
+### 5.2 Alternatives considered
+| Alternative | Strengths | Why we did not choose it |
+|---|---|---|
+| **Gradient-boosted trees** (e.g. XGBoost) on lagged features | Usually strong tabular accuracy; handles NaN natively | Its NaN handling is a learned default direction, not marginalization. Under MNAR masking, that rule is likely to fail in the countries we care about most. It has no explicit transition dynamics, its probabilities need separate calibration, and its feature importance is less principled than BN information measures. **We keep it as a stretch-goal baseline** so the AI model is compared against a strong discriminative model. |
+| **LSTM / recurrent network** | Captures long-range temporal patterns | There are only about 190 sequences of about 29 annual steps each, which is too little data. It also needs imputed inputs and is hard to interpret. |
+| **Kalman filter** (linear-Gaussian state space) | Exact handling of missing data; continuous latent state | It produces a continuous "stability score", not the discrete risk tiers the stakeholder uses. Discretizing afterwards would bring back the same thresholding problem the spreadsheet approach has. |
+| **Markov chain on observed labels** | Simple | It needs the PV label at time *t*, which would make it the persistence baseline. It cannot use the other indicators as evidence. |
+ 
+### 5.3 Course coverage and fallbacks
+| Component | Status | Fallback |
+|---|---|---|
+| BN representation and exact inference (variable elimination) | Covered | — |
+| HMM filtering, prediction, smoothing, Viterbi | Covered | — |
+| Supervised MLE of parameters | Covered | — |
+| Baum–Welch (EM) unsupervised training | **(planned)** | Drop it. Supervised MLE is already the primary method; EM is only a comparison. |
+| BN structure learning (Hill-Climb + BIC) and DBN composition | **(planned)** | Specify the structure by hand from domain knowledge (RL–CC, GE–RQ, GDP growth–unemployment), or use naive-Bayes emissions (Model A alone). |
+ 
+### 5.4 Architecture / data flow
+```mermaid
+flowchart LR
+  subgraph Inputs
+    WGI[WGI 2025 CSV<br/>estimates + std errors]
+    WDI[WDI CSVs]
+  end
+  WGI --> P[Panel builder<br/>ISO3 × year, NaN preserved<br/>missingness report · R1]
+  WDI --> P
+  P --> PRE[Preprocess<br/>transforms, train-only z-scores,<br/>PV → labels, PV dropped from evidence]
+  PRE --> SPLIT{Temporal split<br/>train / val / test}
+  SPLIT -->|train| FIT[Fit<br/>π, A by counts<br/>emissions: Gaussian A / BN B]
+  PERT[Perturbation module<br/>MCAR · MNAR · block · SE-noise] -.->|test only| INF
+  SPLIT -->|val/test evidence| INF[Inference engine<br/>missing-aware forward /<br/>forward–backward]
+  FIT --> INF
+  INF --> OUT[Outputs<br/>nowcast · forecast · alerts<br/>low-info flag · R2, R8]
+  OUT --> EVAL[Evaluation<br/>vs baselines, calibration,<br/>robustness, sensitivity · R3–R10]
+  BASE[Baselines<br/>majority · persistence · LogReg] --> EVAL
+```
+_If the proposal is exported to PDF, this diagram is replaced with a rendered PNG._
+ 
+### 5.5 Major design decisions
+| Decision | Choice | Reason |
+|---|---|---|
+| Number of states | 3 | Two states hide the "Fragile" middle tier, which is where early warning matters. Four or more states would leave too few training examples per state for the Unstable tiers. An ablation with K = 2 and K = 4 will be run on validation data. |
+| Time step | 1 year | Matches how often WGI and WDI are released. The biennial years 1996–2002 are treated as fully missing so the transition matrix A keeps a one-year meaning. |
+| Gaussian covariance (Model A) | Diagonal | Gives 20 parameters per state, which keeps estimates stable for the small Unstable class. Full covariance with marginal sub-blocks also handles missing data correctly, and is run as an ablation. |
+| BN discretization (Model B) | 3 tercile bins per indicator, computed on training data | With in-degree ≤ 2 plus the state as a parent, each conditional probability table has at most 3 × 3 × 3 parent configurations, which the training data can support. |
+| Priors | Laplace smoothing α = 1 on A and π; BDeu with equivalent sample size 5 on CPTs | Keeps rare transitions (e.g. Stable → Unstable) and sparse table cells from being exactly zero, which would make the likelihood −∞ on test data |
+| Numerics | Log-space forward recursion with log-sum-exp | Prevents numerical underflow over sequences of about 29 steps |
+| Decision rule | Argmax for the state label; an alert threshold τ on P(Unstable), tuned on validation data only | Separates calibrated probabilities from the action threshold an analyst chooses |
+| Stack | Python 3.11, NumPy, pandas, `hmmlearn` ≥ 0.3, `pgmpy` ≥ 1.0, scikit-learn, pytest + Hypothesis | Mature, pip-installable, and runs on a laptop. Versions are pinned in `requirements.txt`. |
+ 
+---
+ 
  
 ## 6. Verification and Validation Plan
-_TODO (teammate)._
+
+### 6.1 Verification — did we build it right?
+These are deterministic checks that do not depend on how well the model predicts the real world.
  
+**Known-answer and oracle tests**
+- **Hand-computed HMM:** a 2-state, 3-step example worked on paper. Filtered posteriors and the log-likelihood must match to 1e-12.
+- **Brute-force oracle:** for sequences with T ≤ 6, enumerate all 3ᵀ state paths. The forward-algorithm likelihood and the smoothed marginals must equal the enumeration (to 1e-9). This includes sequences with NaN masks.
+- **Library equivalence:** on complete data, our forward algorithm must match `hmmlearn` `score()` and `predict_proba()` (to 1e-8). Our BN emission likelihood must match brute-force summation over the joint distribution for small networks.
+- **Mutual information:** if the indicator is independent of the state, I = 0. If the indicator is an exact copy of the state, I = H(S).
+**Property-based tests (Hypothesis)**, run on randomly generated valid parameters, sequences, and NaN masks:
+1. Every posterior is a valid distribution: all entries ≥ 0, sum = 1 ± 1e-9, no NaN. This verifies R2.
+2. **All-missing invariant:** if a sequence has every value missing, the filtered state distribution equals the prior pushed forward through the transitions, π·Aᵗ.
+3. **Marginalization invariant:** masking dimension *d* everywhere gives the same result as a model with dimension *d* removed.
+4. **Label symmetry:** permuting the state labels in the parameters permutes the outputs in the same way.
+5. Estimated rows of A sum to 1 and are strictly positive, because of the Laplace smoothing.
+6. The learned BN graph is acyclic, has no edges into Sₜ, and has in-degree ≤ 2.
+**Data and leakage tests:** the R1 row-reconciliation tests. In addition, assertions check that PV is not among the features, that z-score statistics and quantile cut points come only from training years, and that the fit functions never receive rows from validation or test years.
+ 
+**Stochastic components** are checked deterministically first, and then for their statistical behaviour:
+- *Deterministic:* during Baum–Welch, the log-likelihood never decreases from one iteration to the next. With a fixed seed, re-running gives byte-identical output (R9a).
+- *Statistical, synthetic recovery:* we sample 200 sequences × 30 steps from a known 3-state HMM and fit them. Supervised estimates of A must be within 0.05 (max-abs) of the truth. Accuracy on synthetic data with 30% MCAR masking must be within 0.03 of the accuracy of the true-parameter (Bayes-optimal) filter. This confirms the pipeline can recover a structure we know exists before we trust it on real data.
+All tests run in GitHub Actions on every push.
+ 
+### 6.2 Validation — did we build the right thing?
+**Data.** The real WGI + WDI panel with the temporal split from §3.6. The test set is used **once**, after all modelling choices and τ are frozen on the 2017–2019 validation data. Forecasts are scored on origins t = 2019–2023, predicting years 2020–2024.
+ 
+**Baselines**, all using the same features and split:
+- Majority class / climatology
+- Multinomial logistic regression with mean imputation (the main comparison)
+- Persistence, which is given the true state at *t* (reference upper context only)
+- Model A vs. Model B, as an ablation of the BN structure
+- Economic + social indicators only, as an ablation of the WGI shared-source overlap (§3.1)
+- Gradient-boosted trees (stretch goal)
+**Requirement-to-experiment plan**
+| Req. | Experiment | Trials / data | Reported uncertainty |
+|---|---|---|---|
+| R3 | Forecast macro-F1, model vs. LogReg | Test set (about 950 country-years) | Country-cluster bootstrap (1,000 resamples); **paired** bootstrap for the difference vs. LogReg |
+| R4 | Transition recall/precision; PR curve | All test transitions (expected about 50–100) | Bootstrap CI; the count of transitions is stated explicitly |
+| R5 | Brier skill score, ECE, reliability diagrams | Test set, nowcast and forecast | Bootstrap CI on BSS and ECE |
+| R6 | Masking curves m ∈ {0, 10, 30, 50}% for MCAR, MNAR, and block masking | 20 mask seeds × each condition × {A, B, LogReg} | Mean ± SD across seeds |
+| R7 | Noise at c ∈ {1, 2} × WGI standard error, plus WDI relative noise | 20 noise seeds × {A, B, LogReg} | Mean ± SD |
+| R8 | Audit of flags; accuracy for flagged vs. unflagged outputs | Full test output | Counts and per-stratum CI |
+| R9 | Seed stability | 10 seeds | SD of macro-F1 |
+| R10 | Drop-one ΔF1 and BN mutual information per indicator | Test set; 1,000 bootstrap resamples | 95% CI; how stable the rank order is across resamples |
+ 
+**Known validity threats**
+- **2020 COVID shock:** the test period contains an unusual shift in the data, so results are also reported per year.
+- **Few transitions:** there are few state changes, so R4 conclusions are stated with their confidence intervals and never as single point estimates alone.
+- **Label proxy:** the PV-derived label is only a proxy for instability (assumption 5, §3.6).
+**Pre-registered case studies (qualitative).** We plot posterior trajectories for country-years with widely documented instability, to check whether P(Unstable) rose *before* the event. The list is fixed now to prevent cherry-picking: Myanmar 2021, Afghanistan 2021, Sri Lanka 2022, Burkina Faso 2022, Niger 2023, Sudan 2023. Misses are reported alongside hits.
+ 
+**Reporting rule.** Every requirement is reported as met or unmet with its evidence. Any criterion change goes through the change log in `requirements.md`.
+  
 ## 7. Plan, Roles, and Risks
 _TODO (teammate)._
  
