@@ -1,7 +1,7 @@
 # IPR1 Proposal — Can Socioeconomic Indicators Improve Next-Year Governance Forecasts?
 ### A cross-country study with a Morocco case study
  
-**Team:** Michael Hoefler, Colin Railey, Mercedes Rothrock  **Course:** AI380  **Date:** 24 November 2026
+**Team:** Michael Hoefler, Colin Railey, Mercedes Rothrock  **Course:** AI380  **Date:** 25 November 2026
 **Technique:** small feedforward neural network (multilayer perceptron, MLP), compared against Ridge regression and persistence baselines
  
 ---
