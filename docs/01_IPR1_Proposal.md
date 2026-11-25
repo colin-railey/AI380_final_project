@@ -1,6 +1,6 @@
 # IPR1 Proposal — Governance Instability Predictor
  
-**Team:** _[Michael Hoefler, Colin Railey, Mercedes Rothrock]_  **Course:** _[AI380]_  **Date:** _[24 November 2026]_
+**Team:** _Michael Hoefler, Colin Railey, Mercedes Rothrock_  **Course:** _AI380_  **Date:** _24 November 2026_
 **Techniques:** Hidden Markov Models (HMM), Bayesian Networks (BN)
  
 ---
