@@ -229,7 +229,6 @@ These dates carry forward IPR2 on **7 December** and the presentation on **11 De
   2. **Outputs changed from discrete stability tiers to next-year PV and GE scores.**
   3. **Scope is cross-country, with Morocco as a case study.**
   4. **The pitch's "missing / unreliable indicators" goal is kept as R6.**
-- _[For each change the instructor requests, record the change, the section affected, and the evidence it was completed.]_
 ---
  
 ## References
