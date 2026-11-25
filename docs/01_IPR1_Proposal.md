@@ -199,9 +199,9 @@ These dates carry forward IPR2 on **7 December** and the presentation on **11 De
  
 | Dates (2026) | Deliverable | Lead |
 |---|---|---|
-| 25–27 Nov | Source files, hashes, ISO3 crosswalk, joined panel, source audit (V1) | **Data lead** _[Name]_ |
-| 28–30 Nov | Persistence, Ridge, fold masks, metric fixtures, isolation tests (V2–V5) | **Evaluation lead** _[Name]_ |
-| 1–3 Dec | MLP selection, seed study, ablation, synthetic sanity check (V6) | **Model lead** _[Name]_ |
+| 25–27 Nov | Source files, hashes, ISO3 crosswalk, joined panel, source audit (V1) | **Data lead** Rothrock |
+| 28–30 Nov | Persistence, Ridge, fold masks, metric fixtures, isolation tests (V2–V5) | **Evaluation lead** Railey |
+| 1–3 Dec | MLP selection, seed study, ablation, synthetic sanity check (V6) | **Model lead** Hoefler |
 | 4–6 Dec | Review requirements, freeze settings, run the final test once, robustness runs, inspect failures | Whole team |
 | 7 Dec | IPR2: progress evidence, limitations, logged changes | Whole team |
 | 8–11 Dec | Morocco case study, report and slides, independent rerun (V7), rehearsal | Evaluation lead (report) + whole team |
